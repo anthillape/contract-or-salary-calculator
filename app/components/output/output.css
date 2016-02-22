@@ -1,0 +1,13 @@
+.container {
+	display: flex;
+	flex: auto;
+	padding: 10px;
+}
+
+.label {
+	margin-right: 10px;
+}
+
+.output {
+	border: 1px solid #333;
+}
