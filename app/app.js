@@ -1,63 +1,92 @@
 import style from './app.css';
-import Rx from 'rx';
-import Cycle from '@cycle/core';
+import { Observable } from 'rx';
+import { run } from '@cycle/core';
 import { makeDOMDriver, div } from '@cycle/dom';
 import isolate from '@cycle/isolate';
 import Input from 'components/input/input.js';
-// import Output from 'components/output/output.js';
 
 function main(sources) {
 
-	sources.DOM.select('miles').events('click').subscribe(j => console.log('j', j));
-
-	const dayRateProps$ = Rx.Observable.of({label: 'Day rate', initial: 400});
-	const weeksWorkedProps$ = Rx.Observable.of({label: 'Weeks worked per year', initial: 46});
-
-	const dayRateInput = isolate(Input)( {DOM: sources.DOM, props$: dayRateProps$} );
-	const weeksWorkedInput = isolate(Input)( {DOM: sources.DOM, props$: weeksWorkedProps$} );
-
-	const dayRateVTree$ = dayRateInput.DOM;
-	const dayRateValue$ = dayRateInput.value$;
-
-	const weeksWorkedVTree$ = weeksWorkedInput.DOM;
-	const weeksWorkedValue$ = weeksWorkedInput.value$;
-
-	let totalEarned$ = Rx.Observable.combineLatest(dayRateValue$, weeksWorkedValue$, (dayRate, weeksWorked) => {
-		return dayRate * 5 * weeksWorked;
+	const dayRateInput = isolate(Input)({
+		DOM: sources.DOM,
+		props$: Observable.of({label: 'Day rate', initial: 400})
 	});
 
-	const totalEarnedProps$ = Rx.Observable.of({label: 'Total Earned'})
-		.combineLatest( totalEarned$, (label, totalEarned) => {
-			const foo = {
-				...label,
-				initial: totalEarned
-			};
-			return foo;
-		});
+	const daysPerWeekInput = isolate(Input)({
+		DOM: sources.DOM,
+		props$: Observable.of({label: 'Days per week', initial: 5})
+	});
 
-	const totalEarnedOutput = isolate(Input)( {DOM: sources.DOM, props$: totalEarnedProps$} );
+	const weeksWorkedInput = isolate(Input)({
+		DOM: sources.DOM,
+		props$: Observable.of({label: 'Weeks worked per year', initial: 46})
+	});
 
-	const totalEarnedVTree$ = totalEarnedOutput.DOM;
+	const vatRateInput = isolate(Input)({
+		DOM: sources.DOM,
+		props$: Observable.of({label: 'VAT Rate', initial: 0.2})
+	});
+
+	const totalEarned$ = Observable.combineLatest(
+		dayRateInput.value$,
+		weeksWorkedInput.value$,
+		daysPerWeekInput.value$,
+		(dayRate, weeksWorked, daysPerWeek) => {
+			return dayRate * daysPerWeek * weeksWorked;
+		}
+	);
+
+	const totalEarnedOutput = isolate(Input)({
+		DOM: sources.DOM,
+		props$: totalEarned$.map( totalEarned => ({
+			label: 'Total Earned',
+			initial: totalEarned,
+			readonly: true
+		}))
+	});
+
+	const vatToClient$ = Observable.combineLatest(
+		totalEarned$,
+		vatRateInput.value$,
+		(totalEarned, vatRate) => {
+			return totalEarned * vatRate;
+		}
+	);
+
+	const vatToClientInput = isolate(Input)({
+		DOM: sources.DOM,
+		props$: vatToClient$.map( vatToClient => ({
+			label: 'VAT charged to client',
+			initial: vatToClient,
+			readonly: true
+		}))
+	});
 
 	return {
-		DOM: Rx.Observable.combineLatest(
-			dayRateVTree$,
-			weeksWorkedVTree$,
-			totalEarnedVTree$,
-			(dayRateVTree, weeksWorkedVTree, totalEarnedVTree) => {
-				return div({className: style.app}, [
-					'hello',
-					div({className: 'miles'}, ['screw']),
-					dayRateVTree,
-					weeksWorkedVTree,
-					totalEarnedVTree
-				]);
-			})
+		DOM: Observable.combineLatest(
+			dayRateInput.DOM,
+			daysPerWeekInput.DOM,
+			weeksWorkedInput.DOM,
+			totalEarnedOutput.DOM,
+			vatRateInput.DOM,
+			vatToClientInput.DOM,
+			( dayRateView,
+				daysPerWeekView,
+				weeksWorkedView,
+				totalEarnedView,
+				vatRateView,
+				vatToClientView) => div({className: style.app}, [
+					dayRateView,
+					daysPerWeekView,
+					weeksWorkedView,
+					totalEarnedView,
+					vatRateView,
+					vatToClientView
+				])
+			)
 	};
 }
 
-const drivers = {
+run(main, {
 	DOM: makeDOMDriver('#app')
-};
-
-Cycle.run(main, drivers);
+});
