@@ -4,30 +4,31 @@ import { run } from '@cycle/core';
 import { makeDOMDriver, div } from '@cycle/dom';
 import isolate from '@cycle/isolate';
 import Input from 'components/input/input.js';
+import { currency } from 'util.js';
 
 function main(sources) {
 
 	const dayRateInput = isolate(Input)({
 		DOM: sources.DOM,
-		props$: Observable.of({label: 'Day rate', initial: 400})
+		props$: Observable.of({label: 'Day rate', initial: 400, step: 10})
 	});
 
 	const daysPerWeekInput = isolate(Input)({
 		DOM: sources.DOM,
-		props$: Observable.of({label: 'Days per week', initial: 5})
+		props$: Observable.of({label: 'Days per week', initial: 5, step: 1})
 	});
 
 	const weeksWorkedInput = isolate(Input)({
 		DOM: sources.DOM,
-		props$: Observable.of({label: 'Weeks worked per year', initial: 46})
+		props$: Observable.of({label: 'Weeks worked per year', initial: 46, step: 1})
 	});
 
 	const vatRateInput = isolate(Input)({
 		DOM: sources.DOM,
-		props$: Observable.of({label: 'VAT Rate', initial: 0.2})
+		props$: Observable.of({label: 'VAT Rate', initial: 0.2, step: 0.005})
 	});
 
-	const totalEarned$ = Observable.combineLatest(
+	const annualSales$ = Observable.combineLatest(
 		dayRateInput.value$,
 		weeksWorkedInput.value$,
 		daysPerWeekInput.value$,
@@ -36,28 +37,67 @@ function main(sources) {
 		}
 	);
 
-	const totalEarnedOutput = isolate(Input)({
+	const annualSalesOutput = isolate(Input)({
 		DOM: sources.DOM,
-		props$: totalEarned$.map( totalEarned => ({
-			label: 'Total Earned',
-			initial: totalEarned,
+		props$: annualSales$.map( annualSales => ({
+			label: 'Annual Sales',
+			initial: currency(annualSales),
 			readonly: true
 		}))
 	});
 
 	const vatToClient$ = Observable.combineLatest(
-		totalEarned$,
+		annualSales$,
 		vatRateInput.value$,
-		(totalEarned, vatRate) => {
-			return totalEarned * vatRate;
+		(annualSales, vatRate) => {
+			return annualSales * vatRate;
 		}
 	);
 
-	const vatToClientInput = isolate(Input)({
+	const vatToClientOutput = isolate(Input)({
 		DOM: sources.DOM,
 		props$: vatToClient$.map( vatToClient => ({
 			label: 'VAT charged to client',
-			initial: vatToClient,
+			initial: currency(vatToClient),
+			readonly: true
+		}))
+	});
+
+	const grossSales$ = Observable.combineLatest(
+		annualSales$,
+		vatToClientOutput.value$,
+		(annualSales, vatToClient) => {
+			return annualSales + vatToClient;
+		}
+	);
+
+	const grossSalesOutput = isolate(Input)({
+		DOM: sources.DOM,
+		props$: grossSales$.map(sales => ({
+			label: 'Gross Sales',
+			initial: currency(sales),
+			readonly: true
+		}))
+	});
+
+	const vatFlatRateInput = isolate(Input)({
+		DOM: sources.DOM,
+		props$: Observable.of({label: 'VAT Flat Rate', initial: 0.145, step: 0.005})
+	});
+
+	const vatToHMRC$ = Observable.combineLatest(
+		grossSales$,
+		vatFlatRateInput.value$,
+		(grossSales, vatFlatRate) => {
+			return grossSales * vatFlatRate;
+		}
+	);
+
+	const vatToHMRCOutput = isolate(Input)({
+		DOM: sources.DOM,
+		props$: vatToHMRC$.map(vatToHMRC => ({
+			label: 'VAT to HMRC',
+			initial: currency(vatToHMRC),
 			readonly: true
 		}))
 	});
@@ -67,23 +107,35 @@ function main(sources) {
 			dayRateInput.DOM,
 			daysPerWeekInput.DOM,
 			weeksWorkedInput.DOM,
-			totalEarnedOutput.DOM,
+			annualSalesOutput.DOM,
 			vatRateInput.DOM,
-			vatToClientInput.DOM,
+			vatToClientOutput.DOM,
+			grossSalesOutput.DOM,
+			vatFlatRateInput.DOM,
+			vatToHMRCOutput.DOM,
 			( dayRateView,
 				daysPerWeekView,
 				weeksWorkedView,
-				totalEarnedView,
+				annualSalesView,
 				vatRateView,
-				vatToClientView) => div({className: style.app}, [
+				vatToClientView,
+				grossSalesView,
+				vatFlatRateView,
+				vatToHMRCView
+			) => div({className: style.app},
+				[
 					dayRateView,
 					daysPerWeekView,
 					weeksWorkedView,
-					totalEarnedView,
+					annualSalesView,
 					vatRateView,
-					vatToClientView
-				])
+					vatToClientView,
+					grossSalesView,
+					vatFlatRateView,
+					vatToHMRCView
+				]
 			)
+		)
 	};
 }
 

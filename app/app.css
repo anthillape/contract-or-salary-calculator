@@ -1,4 +1,7 @@
 .app {
+	font-family: sans-serif;
+	font-size: 0.7rem;
+	color: #222;
   padding-right: 10px;
 	display: flex;
 	flex-direction: column;
